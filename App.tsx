@@ -1,118 +1,92 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View, Text } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
+import MapViewDirections from 'react-native-maps-directions';
+import { getCurrentLocation } from './src/utils/helperFunctions/GetCurrentLocation'; // Adjust the path as necessary
+import axios from 'react-native-axios';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+const GOOGLE_MAPS_APIKEY = 'AIzaSyDPnTtoIyikfBoIHV93RAaeD8bdtYkjqWI'; // Replace with your Google Maps API key
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+const App = () => {
+  const [location, setLocation] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [startLocation, setStartLocation] = useState(null); // Starting point
+  const [endLocation] = useState({ latitude: 18.6069, longitude: 73.8751 }); // End location
+  const [isRequestingLocation, setIsRequestingLocation] = useState(false); // Flag for location requests
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+  // Function to update location
+  const updateLocation = async () => {
+    if (isRequestingLocation) return; // Prevent new request if one is already in progress
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
-
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+    setIsRequestingLocation(true); // Set flag to indicate request is in progress
+    try {
+      const loc = await getCurrentLocation(); // Get current location
+      if (loc) {
+        setLocation(loc);
+        setErrorMsg(null); // Clear error message
+        setStartLocation(loc); // Set starting location to current location
+      } else {
+        setErrorMsg('Unable to fetch location');
+      }
+    } catch (error) {
+      console.error('Error fetching location:', error);
+      setErrorMsg('Error fetching location');
+    } finally {
+      setIsRequestingLocation(false); // Reset the requesting flag
+    }
   };
 
-  return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+  // Fetch initial location and set up interval
+  useEffect(() => {
+    updateLocation(); // Fetch initial location
+    const interval = setInterval(updateLocation, 10000); // Update every 10 seconds
+    return () => clearInterval(interval); // Cleanup interval
+  }, []);
 
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
+  return (
+    <View style={styles.container}>
+      {location ? (
+        <MapView
+          style={StyleSheet.absoluteFillObject}
+          initialRegion={{
+            ...location,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }}
+          showsUserLocation={true}
+          region={location}
+        >
+          <Marker coordinate={location} title="Current Location" />
+          {startLocation && <Marker coordinate={startLocation} title="Start Location" />}
+          {endLocation && <Marker coordinate={endLocation} title="End Location" />}
+
+          {startLocation && endLocation && (
+            <MapViewDirections
+              origin={startLocation}
+              destination={endLocation}
+              apikey={GOOGLE_MAPS_APIKEY}
+              strokeWidth={6}
+              strokeColor="blue"
+              onReady={(result) => {
+                console.log(result);
+              }}
+              onError={(errorMessage) => {
+                console.error('Error fetching directions:', errorMessage);
+              }}
+            />
+          )}
+        </MapView>
+      ) : (
+        <Text>{errorMsg || 'Getting your location...'}</Text>
+      )}
+    </View>
+  );
+};
 
 export default App;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
